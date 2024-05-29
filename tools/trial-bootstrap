@@ -1,0 +1,57 @@
+#!/bin/sh
+set -e
+
+C8Y_HOST="${C8Y_HOST:-}"
+DEVICE="${DEVICE:-}"
+CODE="${CODE:-}"
+SETUP_TYPE="${SETUP_TYPE:-device}"
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --type)
+            SETUP_TYPE="$2"
+            shift
+            ;;
+        --enrol)
+            ENROL="$2"
+            shift
+            ;;
+        --code)
+            CODE="$2"
+            shift
+            ;;
+    esac
+    shift
+done
+
+sh_c="sudo"
+if [ "$(id -u)" = "0" ]; then
+    sh_c=""
+fi
+
+DEVICE=$(echo "$ENROL" | rev | cut -d/ -f1 | rev)
+C8Y_HOST=$(echo "$ENROL" | cut -d/ -f3)
+
+
+if [ "$(tedge config get device.id 2>/dev/null)" != "$DEVICE" ]; then
+    $sh_c tedge cert create --device-id "$DEVICE"
+fi
+$sh_c tedge config set c8y.url "$C8Y_HOST"
+
+TOKEN=$(echo "$CODE" | cut -d'#' -f1)
+REST_AUTH=$(echo "$CODE" | cut -d'#' -f2)
+curl -fsSL \
+    -XPOST "$ENROL" \
+    -H "Authorization: Basic $REST_AUTH" \
+    -F "token=$TOKEN" \
+    -F file=@"/etc/tedge/device-certs/tedge-certificate.pem"
+
+sleep 1
+attempt=1
+while [ "$attempt" -lt 5 ]; do
+    if $sh_c tedge reconnect c8y; then
+        break
+    fi
+
+    sleep 5
+done

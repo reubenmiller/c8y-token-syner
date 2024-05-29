@@ -1,0 +1,38 @@
+{
+  "apiVersion": "v2",
+  "name": "c8y-trial-share",
+  "version": "0.0.1-SNAPSHOT",
+  "provider": {
+    "name": "thin-edge.io",
+    "domain": "https://thin-edge.io",
+    "support": "support@thin-edge.io"
+  },
+  "isolation": "PER_TENANT",
+  "scale": "NONE",
+  "replicas": 1,
+  "requiredRoles": [
+    "ROLE_TOKEN_TRIAL_REQUEST_READ"
+  ],
+  "roles": [],
+  "resources": {
+    "cpu": "0.5",
+    "memory": "256Mi"
+  },
+  "livenessProbe": {
+    "httpGet": {
+      "path": "/health",
+      "port": 80
+    },
+    "initialDelaySeconds": 30,
+    "periodSeconds": 120
+  },
+  "readinessProbe": {
+    "httpGet": {
+      "path": "/health",
+      "port": 80
+
+    },
+    "initialDelaySeconds": 20,
+    "periodSeconds": 15
+  }
+}
