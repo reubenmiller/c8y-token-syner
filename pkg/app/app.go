@@ -10,6 +10,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/reubenmiller/c8y-token-syner/internal/model"
+	"github.com/reubenmiller/c8y-token-syner/pkg/c8yauth"
 	"github.com/reubenmiller/c8y-token-syner/pkg/handlers"
 	"github.com/reubenmiller/go-c8y/pkg/microservice"
 	"go.uber.org/zap"
@@ -54,6 +55,8 @@ func (a *App) Run() {
 
 		a.echoServer = echo.New()
 		setDefaultContextHandler(a.echoServer, a.c8ymicroservice)
+		provider := c8yauth.NewAuthProvider(application.Client)
+		a.echoServer.Use(c8yauth.AuthenticationBearer(provider))
 
 		a.setRouters()
 

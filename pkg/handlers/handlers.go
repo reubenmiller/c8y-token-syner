@@ -15,14 +15,15 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/reubenmiller/c8y-token-syner/internal/model"
+	"github.com/reubenmiller/c8y-token-syner/pkg/c8yauth"
 	certmanager "github.com/reubenmiller/c8y-token-syner/pkg/cert_manager"
 	"github.com/reubenmiller/c8y-token-syner/pkg/token"
 )
 
 // RegisterHandlers registers the http handlers to the given echo server
 func RegisterHandlers(e *echo.Echo) {
-	e.Add("GET", "/token", GetToken)
-	e.Add("POST", "/register/:id", RegisterDevice)
+	e.Add("GET", "/token", GetToken, c8yauth.Authorization(c8yauth.RoleTokenCreate, c8yauth.RoleTokenAdmin))
+	e.Add("POST", "/register/:id", RegisterDevice, c8yauth.Authorization(c8yauth.RoleTokenRead, c8yauth.RoleTokenCreate, c8yauth.RoleTokenAdmin))
 }
 
 func GetDeviceHMAC(secret string, keys ...string) []byte {
