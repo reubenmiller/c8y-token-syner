@@ -24,12 +24,34 @@ const (
 	RoleTokenAdmin  Role = "ROLE_TOKEN_TRIAL_REQUEST_ADMIN"
 )
 
-func Authentication(authProvider *AuthenticationProvider) echo.MiddlewareFunc {
-	// values := c.Request().Header.Values(header)
-	// return echo
+func SkipCheck(c echo.Context) bool {
+	path := c.Request().URL.Path
+	slog.Debug("Middleware: Checking if need to skip path.", "path", path)
+	noAuthPaths := []string{
+		"/health",
+		"/prometheus",
+	}
+	for _, subpath := range noAuthPaths {
+		if subpath == path {
+			return true
+		}
+	}
+	return false
+}
+
+func AuthenticationBasic(authProvider *AuthenticationProvider) echo.MiddlewareFunc {
 	return middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
-		KeyLookup:  "header:Authorization",
+		KeyLookup:  "header:Authorization,cookie:authorization",
 		AuthScheme: "Basic",
+		Skipper:    SkipCheck,
+		ErrorHandler: func(err error, c echo.Context) error {
+			// Allow other middleware to be processed
+			if _, ok := err.(*middleware.ErrKeyAuthMissing); ok {
+				return nil
+			}
+			return err
+		},
+		ContinueOnIgnoredError: true,
 		Validator: func(rawAuth string, c echo.Context) (bool, error) {
 			auth, err := base64.StdEncoding.DecodeString(rawAuth)
 			if err != nil {
@@ -39,7 +61,15 @@ func Authentication(authProvider *AuthenticationProvider) echo.MiddlewareFunc {
 			if len(parts) != 2 {
 				return false, echo.NewHTTPError(http.StatusUnauthorized, "invalid auth")
 			}
-			sc, ok := authProvider.Authorize(parts[0])
+
+			var ctx context.Context
+			if tenant, username, found := strings.Cut(parts[0], "/"); found {
+				ctx = NewBasicAuthorizationContext(tenant, username, parts[1])
+			} else {
+				// TODO: Should the tenant name be provided by the application?
+				ctx = NewBasicAuthorizationContext("", parts[0], parts[1])
+			}
+			sc, ok := authProvider.Authorize(ctx)
 			if !ok {
 				return false, echo.NewHTTPError(http.StatusUnauthorized, "invalid auth")
 			}
@@ -53,22 +83,17 @@ func AuthenticationBearer(authProvider *AuthenticationProvider) echo.MiddlewareF
 	return middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
 		KeyLookup:  "header:Authorization,cookie:authorization",
 		AuthScheme: "Bearer",
-		Skipper: func(c echo.Context) bool {
-			path := c.Request().URL.Path
-			slog.Debug("Middleware: Checking if need to skip path.", "path", path)
-			noAuthPaths := []string{
-				"/health",
-				"/prometheus",
+		Skipper:    SkipCheck,
+		ErrorHandler: func(err error, c echo.Context) error {
+			// Allow other middleware to be processed
+			if _, ok := err.(*middleware.ErrKeyAuthMissing); ok {
+				return nil
 			}
-			for _, subpath := range noAuthPaths {
-				if subpath == path {
-					return true
-				}
-			}
-			return false
+			return err
 		},
+		ContinueOnIgnoredError: true,
 		Validator: func(rawAuth string, c echo.Context) (bool, error) {
-			sc, ok := authProvider.Authorize(rawAuth)
+			sc, ok := authProvider.Authorize(NewBearerAuthorizationContext(rawAuth))
 			if !ok {
 				return false, echo.NewHTTPError(http.StatusUnauthorized, "invalid auth")
 			}
@@ -130,9 +155,20 @@ func NewBearerAuthorizationContext(token string) context.Context {
 	return context.WithValue(context.Background(), c8y.GetContextAuthTokenKey(), "Bearer "+token)
 }
 
-func (a *AuthenticationProvider) Authorize(token string) (AuthContext, bool) {
+func NewBasicAuthorizationContext(tenant, username, password string) context.Context {
+	var auth string
+	if tenant != "" {
+		auth = fmt.Sprintf("%s/%s:%s", tenant, username, password)
+	} else {
+		auth = fmt.Sprintf("%s:%s", username, password)
+	}
+
+	return context.WithValue(context.Background(), c8y.GetContextAuthTokenKey(), "Basic "+base64.StdEncoding.EncodeToString([]byte(auth)))
+}
+
+func (a *AuthenticationProvider) Authorize(ctx context.Context) (AuthContext, bool) {
 	user, userResp, err := a.client.User.GetCurrentUser(
-		NewBearerAuthorizationContext(token),
+		ctx,
 	)
 	if err != nil {
 		return AuthContext{}, false

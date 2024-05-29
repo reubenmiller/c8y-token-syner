@@ -56,6 +56,7 @@ func (a *App) Run() {
 		a.echoServer = echo.New()
 		setDefaultContextHandler(a.echoServer, a.c8ymicroservice)
 		provider := c8yauth.NewAuthProvider(application.Client)
+		a.echoServer.Use(c8yauth.AuthenticationBasic(provider))
 		a.echoServer.Use(c8yauth.AuthenticationBearer(provider))
 
 		a.setRouters()
