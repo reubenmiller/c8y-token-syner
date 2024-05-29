@@ -57,10 +57,6 @@ The project uses the unofficial github.com/reubenmiller/go-c8y Cumulocity client
     go run cmd/main/main.go
     ```
 
-## Known Issues
-
-* Ctrl-c does not work to kill the application. You will have to manually stop the process by either killing your console, or the process itself.
-
 ## Build
 
 **Pre-requisites**

@@ -1,7 +1,12 @@
 package app
 
 import (
+	"context"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/reubenmiller/c8y-token-syner/internal/model"
@@ -52,7 +57,22 @@ func (a *App) Run() {
 
 		a.setRouters()
 
-		a.echoServer.Logger.Fatal(a.echoServer.Start(addr))
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		// Start server
+		go func() {
+			if err := a.echoServer.Start(addr); err != nil && err != http.ErrServerClosed {
+				a.echoServer.Logger.Fatal("shutting down the server")
+			}
+		}()
+
+		// Wait for interrupt signal to gracefully shutdown the server with a timeout of 10 seconds.
+		<-ctx.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := a.echoServer.Shutdown(ctx); err != nil {
+			a.echoServer.Logger.Fatal(err)
+		}
 	}
 }
 
