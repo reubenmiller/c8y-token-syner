@@ -248,8 +248,8 @@ func RegisterDevice(c echo.Context) error {
 	}
 
 	// Bulk register the device
-	bulkRegistrationBody := `"ID","AUTH_TYPE","TYPE","NAME","com_cumulocity_model_Agent.active"` + "\n" +
-		`"` + externalID + `",CERTIFICATES,thin-edge.io,"` + externalID + `",true`
+	bulkRegistrationBody := `"ID","AUTH_TYPE","TYPE","NAME","com_cumulocity_model_Agent.active","PATH"` + "\n" +
+		`"` + externalID + `",CERTIFICATES,thin-edge.io,"` + externalID + `",true,"` + "fleet_mgmt" + `"`
 
 	formData := map[string]io.Reader{
 		"file": strings.NewReader(bulkRegistrationBody),
