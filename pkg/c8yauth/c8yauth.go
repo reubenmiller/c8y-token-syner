@@ -16,6 +16,16 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// ErrInvalidAuthType is error type when the KeyAuth middleware detects and invalid auth type, e.g. Basic vs Bearer
+type ErrInvalidAuthType struct {
+	Err error
+}
+
+// Error returns errors text
+func (e *ErrInvalidAuthType) Error() string {
+	return e.Err.Error()
+}
+
 type Role string
 
 const (
@@ -49,13 +59,18 @@ func AuthenticationBasic(authProvider *AuthenticationProvider) echo.MiddlewareFu
 			if _, ok := err.(*middleware.ErrKeyAuthMissing); ok {
 				return nil
 			}
+			if _, ok := err.(*ErrInvalidAuthType); ok {
+				return nil
+			}
 			return err
 		},
 		ContinueOnIgnoredError: true,
 		Validator: func(rawAuth string, c echo.Context) (bool, error) {
 			auth, err := base64.StdEncoding.DecodeString(rawAuth)
 			if err != nil {
-				return false, echo.NewHTTPError(http.StatusUnauthorized, "invalid base64 auth value")
+				return false, &ErrInvalidAuthType{
+					Err: err,
+				}
 			}
 			parts := strings.Split(string(auth), ":")
 			if len(parts) != 2 {
