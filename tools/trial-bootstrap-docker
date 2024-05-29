@@ -40,6 +40,7 @@ docker compose up -d
 
 
 if [ "$($sh_c tedge config get device.id 2>/dev/null)" != "$DEVICE" ]; then
+    $sh_c tedge cert remove 2>/dev/null ||:
     $sh_c tedge cert create --device-id "$DEVICE"
 fi
 $sh_c tedge config set c8y.url "$C8Y_HOST"
