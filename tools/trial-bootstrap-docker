@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
 done
 
 
-sh_c="docker compose exec tedge"
+sh_c="docker compose exec --no-TTY tedge"
 
 DEVICE=$(echo "$ENROL" | rev | cut -d/ -f1 | rev)
 C8Y_HOST=$(echo "$ENROL" | cut -d/ -f3)
