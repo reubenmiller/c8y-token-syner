@@ -47,6 +47,7 @@ func ExternalIdExists(m *microservice.Microservice, externalID string) bool {
 func GetToken(c echo.Context) error {
 	cc := c.(*model.RequestContext)
 	externalID := c.QueryParam("externalId")
+	scriptType := c.QueryParam("type")
 
 	// Check if device is already registered
 	if ExternalIdExists(cc.Microservice, externalID) {
@@ -92,18 +93,30 @@ func GetToken(c echo.Context) error {
 	}
 
 	code := stoken + "#" + sharedCreds
-	installScriptDevice := fmt.Sprintf(`
+	installScriptDevice := strings.TrimSpace(fmt.Sprintf(`
 	wget -O - https://raw.githubusercontent.com/reubenmiller/c8y-token-syner/main/tools/trial-bootstrap | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
-	`, tenant.DomainName, externalID, code)
+	`, tenant.DomainName, externalID, code))
 
-	installScriptDocker := fmt.Sprintf(`
+	installScriptDocker := strings.TrimSpace(fmt.Sprintf(`
 	wget -O - https://raw.githubusercontent.com/reubenmiller/c8y-token-syner/main/tools/trial-bootstrap-docker | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
-	`, tenant.DomainName, externalID, code)
+	`, tenant.DomainName, externalID, code))
 
+	switch scriptType {
+	case "docker":
+		c.String(http.StatusCreated, installScriptDocker)
+	case "device":
+		c.String(http.StatusCreated, installScriptDevice)
+	default:
+		return c.JSON(http.StatusCreated, map[string]string{
+			"token":  stoken,
+			"script": installScriptDevice,
+			"docker": installScriptDocker,
+		})
+	}
 	return c.JSON(http.StatusCreated, map[string]string{
 		"token":  stoken,
-		"script": strings.TrimSpace(installScriptDevice),
-		"docker": strings.TrimSpace(installScriptDocker),
+		"script": installScriptDevice,
+		"docker": installScriptDocker,
 	})
 }
 
