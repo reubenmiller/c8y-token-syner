@@ -93,11 +93,11 @@ func GetToken(c echo.Context) error {
 
 	code := stoken + "#" + sharedCreds
 	installScriptDevice := fmt.Sprintf(`
-	.wget -O - https://raw.githubusercontent.com/reubenmiller/c8y-token-syner/main/tools/trial-bootstrap | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
+	wget -O - https://raw.githubusercontent.com/reubenmiller/c8y-token-syner/main/tools/trial-bootstrap | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
 	`, tenant.DomainName, externalID, code)
 
 	installScriptDocker := fmt.Sprintf(`
-	.wget -O - https://raw.githubusercontent.com/reubenmiller/c8y-token-syner/main/tools/trial-bootstrap-docker | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
+	wget -O - https://raw.githubusercontent.com/reubenmiller/c8y-token-syner/main/tools/trial-bootstrap-docker | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
 	`, tenant.DomainName, externalID, code)
 
 	return c.JSON(http.StatusCreated, map[string]string{
