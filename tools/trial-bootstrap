@@ -29,6 +29,9 @@ if [ "$(id -u)" = "0" ]; then
     sh_c=""
 fi
 
+# install thin-edge.io
+wget -O - https://thin-edge.io/install.sh | sh -s
+
 DEVICE=$(echo "$ENROL" | rev | cut -d/ -f1 | rev)
 C8Y_HOST=$(echo "$ENROL" | cut -d/ -f3)
 
