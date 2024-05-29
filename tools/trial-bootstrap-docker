@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e
+set -ex
 
 COMPOSE_FILE_URL="https://raw.githubusercontent.com/thin-edge/tedge-demo-container/main/demos/docker-compose/device/docker-compose.yaml"
 
@@ -9,64 +9,67 @@ DEVICE="${DEVICE:-}"
 CODE="${CODE:-}"
 SETUP_TYPE="${SETUP_TYPE:-device}"
 
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --type)
-            SETUP_TYPE="$2"
-            shift
-            ;;
-        --enrol)
-            ENROL="$2"
-            shift
-            ;;
-        --code)
-            CODE="$2"
-            shift
-            ;;
-    esac
-    shift
-done
+main() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --type)
+                SETUP_TYPE="$2"
+                shift
+                ;;
+            --enrol)
+                ENROL="$2"
+                shift
+                ;;
+            --code)
+                CODE="$2"
+                shift
+                ;;
+        esac
+        shift
+    done
 
 
-sh_c="docker compose exec --no-TTY tedge"
+    sh_c="docker compose exec --no-TTY tedge"
 
-DEVICE=$(echo "$ENROL" | rev | cut -d/ -f1 | rev)
-C8Y_HOST=$(echo "$ENROL" | cut -d/ -f3)
+    DEVICE=$(echo "$ENROL" | rev | cut -d/ -f1 | rev)
+    C8Y_HOST=$(echo "$ENROL" | cut -d/ -f3)
 
-mkdir -p "$DEVICE"
-cd "$DEVICE"
-wget -q -O - "$COMPOSE_FILE_URL" > "docker-compose.yaml"
-docker compose up -d
+    mkdir -p "$DEVICE"
+    cd "$DEVICE"
+    wget -q -O - "$COMPOSE_FILE_URL" > "docker-compose.yaml"
+    docker compose up -d
+    sleep 1
 
-
-if [ "$($sh_c tedge config get device.id 2>/dev/null)" != "$DEVICE" ]; then
-    $sh_c tedge cert remove 2>/dev/null ||:
-    $sh_c tedge cert create --device-id "$DEVICE"
-fi
-$sh_c tedge config set c8y.url "$C8Y_HOST"
-
-TOKEN=$(echo "$CODE" | cut -d'#' -f1)
-REST_AUTH=$(echo "$CODE" | cut -d'#' -f2)
-$sh_c curl -fsSL \
-    -XPOST "$ENROL" \
-    -H "Authorization: Basic $REST_AUTH" \
-    -F "token=$TOKEN" \
-    -F file=@"/etc/tedge/device-certs/tedge-certificate.pem"
-
-sleep 1
-attempt=1
-while [ "$attempt" -lt 5 ]; do
-    if $sh_c tedge reconnect c8y; then
-        break
+    if [ "$($sh_c tedge config get device.id 2>/dev/null)" != "$DEVICE" ]; then
+        $sh_c tedge cert remove 2>/dev/null ||:
+        $sh_c tedge cert create --device-id "$DEVICE"
     fi
+    $sh_c tedge config set c8y.url "$C8Y_HOST"
 
-    sleep 5
-done
+    TOKEN=$(echo "$CODE" | cut -d'#' -f1)
+    REST_AUTH=$(echo "$CODE" | cut -d'#' -f2)
+    $sh_c curl -fsSL \
+        -XPOST "$ENROL" \
+        -H "Authorization: Basic $REST_AUTH" \
+        -F "token=$TOKEN" \
+        -F file=@"/etc/tedge/device-certs/tedge-certificate.pem"
+
+    sleep 1
+    attempt=1
+    while [ "$attempt" -lt 5 ]; do
+        if $sh_c tedge reconnect c8y; then
+            break
+        fi
+
+        sleep 5
+    done
 
 
-echo
-echo "Open the device in the browser using:"
-echo
-echo "  https://$C8Y_HOST/apps/devicemanagement/index.html#/assetsearch?search=$DEVICE"
-echo
-exit 0
+    echo
+    echo "Open the device in the browser using:"
+    echo
+    echo "  https://$C8Y_HOST/apps/devicemanagement/index.html#/assetsearch?search=$DEVICE"
+    echo
+}
+
+main "$@"
