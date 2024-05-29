@@ -1,5 +1,5 @@
 #!/bin/sh
-set -ex
+set -e
 
 COMPOSE_FILE_URL="https://raw.githubusercontent.com/thin-edge/tedge-demo-container/main/demos/docker-compose/device/docker-compose.yaml"
 
@@ -23,6 +23,9 @@ main() {
             --code)
                 CODE="$2"
                 shift
+                ;;
+            --debug)
+                set -x
                 ;;
         esac
         shift
