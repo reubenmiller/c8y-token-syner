@@ -103,9 +103,9 @@ func GetToken(c echo.Context) error {
 
 	switch scriptType {
 	case "docker":
-		c.String(http.StatusCreated, installScriptDocker)
+		return c.String(http.StatusCreated, installScriptDocker)
 	case "device":
-		c.String(http.StatusCreated, installScriptDevice)
+		return c.String(http.StatusCreated, installScriptDevice)
 	default:
 		return c.JSON(http.StatusCreated, map[string]string{
 			"token":  stoken,
@@ -113,11 +113,6 @@ func GetToken(c echo.Context) error {
 			"docker": installScriptDocker,
 		})
 	}
-	return c.JSON(http.StatusCreated, map[string]string{
-		"token":  stoken,
-		"script": installScriptDevice,
-		"docker": installScriptDocker,
-	})
 }
 
 type ErrorMessage struct {
