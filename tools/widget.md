@@ -1,6 +1,6 @@
 #### 💻 Device
 
-Connect a physical device using on of the tokens below:
+Connect a physical device using one of the tokens below:
 
 <ul>
     <li><a href="/service/c8y-token-syner/token?type=device&externalId=device001" target="_blank">connect @ device001</a></li>
