@@ -13,7 +13,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/reubenmiller/go-c8y/pkg/c8y"
-	"github.com/tidwall/gjson"
 )
 
 // ErrInvalidAuthType is error type when the KeyAuth middleware detects and invalid auth type, e.g. Basic vs Bearer
@@ -191,22 +190,11 @@ func (a *AuthenticationProvider) Authorize(ctx context.Context) (AuthContext, bo
 	roles := make(map[string]struct{})
 
 	slog.Debug("User roles", "response", userResp.JSON())
-
-	if effectiveRoles := userResp.JSON("effectiveRoles"); effectiveRoles.Exists() {
-		effectiveRoles.ForEach(func(key, value gjson.Result) bool {
-			roleID := value.Get("id").String()
-			if roleID != "" {
-				roles[roleID] = struct{}{}
-			}
-			return true
-		})
+	if user.EffectiveRoles != nil {
+		for _, r := range user.EffectiveRoles {
+			roles[r.ID] = struct{}{}
+		}
 	}
-	// TODO: Use once go-c8y 0.18.0 is released
-	// if user.EffectiveRoles != nil {
-	// 	for _, r := range user.Roles.References {
-	// 		roles[r.Role.ID] = struct{}{}
-	// 	}
-	// }
 
 	return AuthContext{
 		UserID: user.ID,
