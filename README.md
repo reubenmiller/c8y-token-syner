@@ -6,6 +6,8 @@ Experimental microservice to create one-time tokens to use to register devices f
 
 The project uses the unofficial github.com/reubenmiller/go-c8y Cumulocity client modules.
 
+![token-registration-architecture](./docs/token-registration.drawio.png)
+
 # Getting Started
 
 ## Starting the app locally
