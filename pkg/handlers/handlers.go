@@ -41,10 +41,10 @@ func GetDeviceHMAC(secret string, keys ...string) []byte {
 	return []byte(strings.Join(values, "."))
 }
 
-func ExternalIdExists(m *microservice.Microservice, externalID string) bool {
+func ExternalIdExists(m *microservice.Microservice, tenant string, externalID string) bool {
 	// Check for proof that the external id definitely does NOT exist
 	_, extResp, _ := m.Client.Identity.GetExternalID(
-		m.WithServiceUser(),
+		m.WithServiceUser(tenant),
 		"c8y_Serial",
 		externalID,
 	)
@@ -78,8 +78,16 @@ func GetToken(c echo.Context) error {
 	externalID := c.QueryParam("externalId")
 	scriptType := c.QueryParam("type")
 
+	auth, err := c8yauth.GetUserSecurityContext(c)
+	if err != nil {
+		return c.JSON(http.StatusForbidden, ErrorMessage{
+			Error:  "invalid user context",
+			Reason: err.Error(),
+		})
+	}
+
 	// Check if device is already registered
-	if ExternalIdExists(cc.Microservice, externalID) {
+	if ExternalIdExists(cc.Microservice, auth.Tenant, externalID) {
 		return c.JSON(http.StatusConflict, ErrorMessage{
 			Error:  "Device is already registered",
 			Reason: "The external identity already exists. You can only generate tokens for devices that don't already exist",
@@ -88,7 +96,7 @@ func GetToken(c echo.Context) error {
 
 	signingKey := GetDeviceHMAC(
 		cc.Microservice.Config.GetString("token.secret"),
-		cc.Microservice.Client.TenantName,
+		auth.Tenant,
 		externalID,
 	)
 
@@ -117,7 +125,7 @@ func GetToken(c echo.Context) error {
 	if sharedCreds == "" {
 		servicePrefix := strings.TrimRight(cc.Microservice.Config.GetString("service.prefix"), "/")
 		sharedCredsResp, err := cc.Microservice.Client.SendRequest(
-			cc.Microservice.WithServiceUser(),
+			cc.Microservice.WithServiceUser(auth.Tenant),
 			c8y.RequestOptions{
 				Method: "GET",
 				Path:   servicePrefix + ApiSharedAuthorization,
@@ -136,7 +144,7 @@ func GetToken(c echo.Context) error {
 	encodedAuthHeader := base64.StdEncoding.EncodeToString([]byte(sharedCreds))
 
 	tenant, _, err := cc.Microservice.Client.Tenant.GetCurrentTenant(
-		cc.Microservice.WithServiceUser(),
+		cc.Microservice.WithServiceUser(auth.Tenant),
 	)
 	if err != nil {
 		return err
@@ -226,9 +234,17 @@ func RegisterDevice(c echo.Context) error {
 		})
 	}
 
+	auth, err := c8yauth.GetUserSecurityContext(c)
+	if err != nil {
+		return c.JSON(http.StatusForbidden, ErrorMessage{
+			Error:  "invalid user context",
+			Reason: err.Error(),
+		})
+	}
+
 	// TODO: Do we need to check again if the device has been created by someone else
 	// since the token was issued?
-	if ExternalIdExists(cc.Microservice, externalID) {
+	if ExternalIdExists(cc.Microservice, auth.Tenant, externalID) {
 		return c.JSON(http.StatusConflict, ErrorMessage{
 			Error:  "Device is already registered",
 			Reason: "The external identity already exists. You can only generate tokens for devices that don't already exist",
@@ -277,7 +293,7 @@ func RegisterDevice(c echo.Context) error {
 	// Add trusted certificate
 	// With auto registration disabled as it will be registered via the bulk reg api (TODO: does not provide any value)
 	cert, certResp, err := cc.Microservice.Client.DeviceCertificate.Create(
-		cc.Microservice.WithServiceUser(),
+		cc.Microservice.WithServiceUser(auth.Tenant),
 		&c8y.Certificate{
 			Name:                    externalID,
 			AutoRegistrationEnabled: false,
@@ -305,7 +321,7 @@ func RegisterDevice(c echo.Context) error {
 	}
 
 	resp, err := cc.Microservice.Client.SendRequest(
-		cc.Microservice.WithServiceUser(),
+		cc.Microservice.WithServiceUser(auth.Tenant),
 		c8y.RequestOptions{
 			Path:     "devicecontrol/bulkNewDeviceRequests",
 			Method:   http.MethodPost,
