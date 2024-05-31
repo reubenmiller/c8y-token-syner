@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -117,41 +115,10 @@ func AuthenticationBearer(authProvider *AuthenticationProvider) echo.MiddlewareF
 	})
 }
 
-type (
-	Stats struct {
-		Uptime       time.Time      `json:"uptime"`
-		RequestCount uint64         `json:"requestCount"`
-		Statuses     map[string]int `json:"statuses"`
-		mutex        sync.RWMutex
-	}
-)
-
-func NewStats() *Stats {
-	return &Stats{
-		Uptime:   time.Now(),
-		Statuses: map[string]int{},
-	}
-}
-
-// Process is the middleware function.
-func (s *Stats) Process(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		if err := next(c); err != nil {
-			c.Error(err)
-		}
-		s.mutex.Lock()
-		defer s.mutex.Unlock()
-
-		userAuth := c.Request().Header.Values("Authorization")
-		_ = userAuth
-
-		return nil
-	}
-}
-
 // AuthContext holds information about user who has been authenticated for request
 type AuthContext struct {
 	UserID string
+	Tenant string
 	Roles  map[string]struct{}
 }
 
@@ -196,9 +163,17 @@ func (a *AuthenticationProvider) Authorize(ctx context.Context) (AuthContext, bo
 		}
 	}
 
+	// Get current tenant
+	tenant, _, err := a.client.Tenant.GetCurrentTenant(ctx)
+	if err != nil {
+		slog.Error("Could not get user's current tenant", "reason", err)
+		return AuthContext{}, false
+	}
+
 	return AuthContext{
 		UserID: user.ID,
 		Roles:  roles,
+		Tenant: tenant.Name,
 	}, true
 }
 
@@ -206,17 +181,25 @@ const (
 	SecurityContextKey = "__SecurityContextKey__"
 )
 
+func GetUserSecurityContext(c echo.Context) (AuthContext, error) {
+	raw := c.Get(SecurityContextKey)
+	if raw == nil {
+		return AuthContext{}, echo.ErrUnauthorized
+	}
+	authContext, ok := raw.(AuthContext)
+	if !ok {
+		return AuthContext{}, echo.ErrUnauthorized
+	}
+	return authContext, nil
+}
+
 // Authorization checks if context contains at least one given privilege (OR check) on failure request ends with 401 unauthorized error
 func Authorization(roles ...Role) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			raw := c.Get(SecurityContextKey)
-			if raw == nil {
-				return echo.ErrUnauthorized
-			}
-			authContext, ok := raw.(AuthContext)
-			if !ok {
-				return echo.ErrUnauthorized
+			authContext, err := GetUserSecurityContext(c)
+			if err != nil {
+				return err
 			}
 			if !authContext.CheckPrivilege(roles...) {
 				return echo.NewHTTPError(http.StatusUnauthorized, fmt.Sprintf("missing role: %v", roles))

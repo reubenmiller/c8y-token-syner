@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,10 +21,16 @@ import (
 	"github.com/reubenmiller/c8y-token-syner/pkg/token"
 )
 
+var ApiSharedAuthorization = "/shared/authorization"
+
 // RegisterHandlers registers the http handlers to the given echo server
-func RegisterHandlers(e *echo.Echo) {
+func RegisterEnrolmentHandlers(e *echo.Echo) {
 	e.Add("GET", "/token", GetToken, c8yauth.Authorization(c8yauth.RoleTokenCreate, c8yauth.RoleTokenAdmin))
 	e.Add("POST", "/register/:id", RegisterDevice, c8yauth.Authorization(c8yauth.RoleTokenRead, c8yauth.RoleTokenCreate, c8yauth.RoleTokenAdmin))
+}
+
+func RegisterSharedAuthHandlers(e *echo.Echo) {
+	e.Add("GET", ApiSharedAuthorization, GetSharedCredentials, c8yauth.Authorization(c8yauth.RoleTokenRead))
 }
 
 func GetDeviceHMAC(secret string, keys ...string) []byte {
@@ -42,6 +49,27 @@ func ExternalIdExists(m *microservice.Microservice, externalID string) bool {
 		externalID,
 	)
 	return extResp != nil && extResp.StatusCode() == http.StatusOK
+}
+
+func GetSharedCredentials(c echo.Context) error {
+	cc := c.(*model.RequestContext)
+	authContext, err := c8yauth.GetUserSecurityContext(c)
+	if err != nil {
+		return err
+	}
+
+	user := cc.Microservice.WithServiceUserCredentials(authContext.Tenant)
+	authHeader := "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s/%s:%s", user.Tenant, user.Username, user.Password)))
+
+	accept := c.Request().Header.Get("Accept")
+	switch accept {
+	case "plain/text":
+		return c.String(http.StatusOK, authHeader)
+	default:
+		return c.JSON(http.StatusOK, map[string]any{
+			"authorization": authHeader,
+		})
+	}
 }
 
 // GetDeviceByNameHandler returns a managed object by its name
@@ -84,8 +112,29 @@ func GetToken(c echo.Context) error {
 		return err
 	}
 
-	// TODO: Get these credentials from the microservice via the application api tenant/username:password
+	// Get these authorization header from service (used by client for initial authentication)
 	sharedCreds := cc.Microservice.Config.GetString("token.sharedCreds")
+	if sharedCreds == "" {
+		servicePrefix := strings.TrimRight(cc.Microservice.Config.GetString("service.prefix"), "/")
+		sharedCredsResp, err := cc.Microservice.Client.SendRequest(
+			cc.Microservice.WithServiceUser(),
+			c8y.RequestOptions{
+				Method: "GET",
+				Path:   servicePrefix + ApiSharedAuthorization,
+				Accept: "plain/text",
+			},
+		)
+		if err != nil {
+			slog.Error("Could not get microservice secret", "reason", err)
+			return c.JSON(http.StatusUnprocessableEntity, ErrorMessage{
+				Error:  "Could not get shared secret from microservice",
+				Reason: err.Error(),
+			})
+		}
+		sharedCreds = string(sharedCredsResp.Body())
+	}
+	encodedAuthHeader := base64.StdEncoding.EncodeToString([]byte(sharedCreds))
+
 	tenant, _, err := cc.Microservice.Client.Tenant.GetCurrentTenant(
 		cc.Microservice.WithServiceUser(),
 	)
@@ -93,7 +142,7 @@ func GetToken(c echo.Context) error {
 		return err
 	}
 
-	code := stoken + "#" + sharedCreds
+	code := stoken + "#" + encodedAuthHeader
 	installScriptDevice := strings.TrimSpace(fmt.Sprintf(`
 	wget -O - https://raw.githubusercontent.com/reubenmiller/c8y-token-syner/main/tools/trial-bootstrap | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
 	`, tenant.DomainName, externalID, code))

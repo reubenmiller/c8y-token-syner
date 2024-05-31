@@ -9,6 +9,8 @@ DEPLOY_USER=
 DEPLOY_PASSWORD=
 APPLICATION_NAME=
 APPLICATION_ID=
+MANIFEST_FILE="cumulocity.json"
+DOCKER_FILE="Dockerfile"
 
 PACK=1
 DEPLOY=1
@@ -120,6 +122,16 @@ readInput () {
 		shift
 		shift
 		;;
+		--dockerfile)
+		DOCKER_FILE=$2
+		shift
+		shift
+		;;
+		--manifest)
+		MANIFEST_FILE=$2
+		shift
+		shift
+		;;
 		*)
 		shift
 		;;
@@ -164,10 +176,10 @@ verifyPackPrerequisits () {
 	result=0
 	verifyParamSet "$IMAGE_NAME" "name"
 
-	isPresent $(find "$WORK_DIR" -maxdepth 1 -name "Dockerfile" | wc -l) "[ERROR] Stopped: missing dockerfile in work directory: $WORK_DIR"
-	isPresent $(find . -maxdepth 1 -name "cumulocity.json" | wc -l) "[ERROR] Stopped: missing cumulocity.json in work directory: $WORK_DIR"
+	isPresent $(find "$WORK_DIR" -maxdepth 1 -name "$DOCKER_FILE" | wc -l) "[ERROR] Stopped: missing dockerfile in work directory: $WORK_DIR"
+	isPresent $(find . -maxdepth 1 -name "$MANIFEST_FILE" | wc -l) "[ERROR] Stopped: missing $MANIFEST_FILE in work directory: $WORK_DIR"
 	# Find the dockerfile, and set context
-	DOCKERFILE_FOLDER=$(echo "$(dirname `find "$WORK_DIR" -maxdepth 1 -name "Dockerfile"`)")
+	DOCKERFILE_FOLDER=$(echo "$(dirname `find "$WORK_DIR" -maxdepth 1 -name "$DOCKER_FILE"`)")
 
 	if [ "$result" == "1" ]
 	then
@@ -199,7 +211,7 @@ clearTarget () {
 buildImage () {
 	cd "$DOCKERFILE_FOLDER"
 	echo "[INFO] Build image $IMAGE_NAME:$TAG_NAME"
-	docker build --platform=linux/amd64 --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY --build-arg http_proxy=$HTTP_PROXY --build-arg https_proxy=$HTTPS_PROXY -t $IMAGE_NAME:$TAG_NAME .
+	docker build -f "$DOCKER_FILE" --platform=linux/amd64 --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY --build-arg http_proxy=$HTTP_PROXY --build-arg https_proxy=$HTTPS_PROXY -t $IMAGE_NAME:$TAG_NAME .
 }
 
 exportImage () {
@@ -210,7 +222,9 @@ exportImage () {
 zipFile () {
 	echo "[INFO] Zip file $ZIP_NAME"
 	echo "[INFO] Working dir [$( pwd )]"
-	zip $ZIP_NAME cumulocity.json "image.tar"
+	cp "$MANIFEST_FILE" "cumulocity.json"
+	zip $ZIP_NAME "cumulocity.json" "image.tar"
+	rm -f "cumulocity.json"
 
 	echo "[INFO] Removing image.tar"
 	if [ -f image.tar ]; then

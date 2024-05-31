@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -14,6 +16,13 @@ import (
 	"github.com/reubenmiller/c8y-token-syner/pkg/handlers"
 	"github.com/reubenmiller/go-c8y/pkg/microservice"
 	"go.uber.org/zap"
+)
+
+var Mode string
+
+const (
+	ModeEnroller   = "enrolment"
+	ModeSharedAuth = "sharedauth"
 )
 
 // App represents the http server and c8y microservice application
@@ -99,8 +108,39 @@ func (a *App) setRouters() {
 	/*
 	 ** Routes
 	 */
-	// TODO: Add routes here
-	handlers.RegisterHandlers(server)
+	mode := a.c8ymicroservice.Config.GetString("mode")
+	if mode == "" {
+		mode = ModeEnroller
+	}
+	switch mode {
+	case ModeSharedAuth:
+		// Panic if the user tries to give the too many permissions (to protect against misconfiguration)
+		user, _, err := a.c8ymicroservice.Client.User.GetCurrentUser(
+			a.c8ymicroservice.WithServiceUser(),
+		)
+		if err != nil {
+			slog.Error("Microservice roles are too permissive! Remove the requiredRoles from the microservice's manifest file")
+			panic("role is too ")
+		}
+
+		roles := make([]string, 0)
+		slog.Info("Current microservice service user.", "roles", user.EffectiveRoles)
+		for _, role := range user.EffectiveRoles {
+			// exclude the internal roles (assigned by teh ms runtime env)
+			if strings.EqualFold(role.ID, "ROLE_SYSTEM") {
+				continue
+			}
+			roles = append(roles, role.ID)
+		}
+
+		if len(roles) > 1 {
+			panic("Microservice roles are too permissive! Remove the requiredRoles from the microservice's manifest file")
+		}
+
+		handlers.RegisterSharedAuthHandlers(server)
+	default:
+		handlers.RegisterEnrolmentHandlers(server)
+	}
 
 	/*
 	 ** Health endpoints
