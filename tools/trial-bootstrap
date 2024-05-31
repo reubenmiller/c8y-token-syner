@@ -45,10 +45,10 @@ fi
 $sh_c tedge config set c8y.url "$C8Y_HOST"
 
 TOKEN=$(echo "$CODE" | cut -d'#' -f1)
-REST_AUTH=$(echo "$CODE" | cut -d'#' -f2)
+REST_AUTH=$(echo "$CODE" | cut -d'#' -f2 | base64 -d)
 curl -fsSL \
     -XPOST "$ENROL" \
-    -H "Authorization: Basic $REST_AUTH" \
+    -H "$REST_AUTH" \
     -F "token=$TOKEN" \
     -F file=@"/etc/tedge/device-certs/tedge-certificate.pem"
 
