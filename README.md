@@ -71,6 +71,9 @@ Build the Cumulocity microservice zip file by executing
 ```sh
 just build
 
-# Upload to Cumulocity IoT
+# Upload shared access service
+c8y microservices create --file c8y-token-shared.zip
+
+# Upload enrolment service
 c8y microservices create --file c8y-token-syner.zip
 ```
