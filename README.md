@@ -8,6 +8,37 @@ The project uses the unofficial github.com/reubenmiller/go-c8y Cumulocity client
 
 ![token-registration-architecture](./docs/token-registration.drawio.png)
 
+## Architecture
+
+### Device Enrolment token generator
+
+```mermaid
+sequenceDiagram
+    User->>+UI: Request enrolment token <br>(for a specific device identity)
+    UI->>+c8y-token-syner: GET /token
+    c8y-token-syner->>c8y-trial-share: GET /shared/authorization
+    c8y-trial-share-->>c8y-token-syner: Shared authorization header<br>(scoped for c8y-token-sync microservice only!)
+    c8y-token-syner->>c8y-token-syner: Generate JWT with device identity
+    c8y-token-syner-->>UI: Command one-liner <br>(Includes jwt and pre-shared creds)
+    UI-->>User: Display command one-liner
+```
+
+### Device enrolment
+
+```mermaid
+sequenceDiagram
+    User->>+Device: Execute one-liner
+    Device->>+Internet: Fetch setup script
+    Internet-->>Device: Script
+    Device->>Device: install thin-edge.io
+    Device->>c8y-token-syner: /POST /register/{device}<br>(includes shared-creds and JWT)
+    c8y-token-syner->>c8y-token-syner: Validate JWT and ensure device does not exist
+    c8y-token-syner->>TrustedCertificates: POST /trustedcertificates
+    TrustedCertificates-->>c8y-token-syner: OK
+    c8y-token-syner-->>Device: OK
+    Device->>Cumulocity: Connect via MQTT
+```
+
 # Getting Started
 
 ## Starting the app locally
