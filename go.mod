@@ -4,7 +4,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/labstack/echo/v4 v4.12.0
 	github.com/prometheus/client_golang v1.19.1
-	github.com/reubenmiller/go-c8y v0.19.0
+	github.com/reubenmiller/go-c8y v0.20.0
 	go.uber.org/zap v1.27.0
 )
 

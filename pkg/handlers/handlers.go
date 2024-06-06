@@ -72,6 +72,39 @@ func GetSharedCredentials(c echo.Context) error {
 	}
 }
 
+// Check if max number of trusted certificates has been exceeded
+func checkMaxCertificates(m *microservice.Microservice, auth c8yauth.AuthContext) (int, error) {
+	_, existingCertificates, err := m.Client.DeviceCertificate.GetCertificates(
+		m.WithServiceUser(auth.Tenant),
+		auth.Tenant,
+		&c8y.DeviceCertificateCollectionOptions{
+			PaginationOptions: c8y.PaginationOptions{
+				PageSize:       1,
+				WithTotalPages: true,
+			},
+		},
+	)
+	if err != nil {
+		return existingCertificates.StatusCode(), &ErrorMessage{
+			Err:    "Could not verify number of existing certificates",
+			Reason: err.Error(),
+		}
+	}
+	totalCertificates := int64(-1)
+	if v := existingCertificates.JSON("statistics.totalPages"); v.Exists() {
+		totalCertificates = v.Int()
+	}
+	maxCertificates := int64(m.Config.GetInt("certificates.max"))
+	slog.Info("Device certificate statistics: ", "tenant", auth.Tenant, "total", totalCertificates, "limit", maxCertificates)
+	if totalCertificates < 0 || totalCertificates > maxCertificates {
+		return http.StatusForbidden, &ErrorMessage{
+			Err:    fmt.Sprintf("Total number of trusted certificates exceeded. current=%d, max=%d", totalCertificates, maxCertificates),
+			Reason: fmt.Sprintf("The enrolment service is limited to the enrolment of %d (certificate based) devices", maxCertificates),
+		}
+	}
+	return 0, nil
+}
+
 // GetDeviceByNameHandler returns a managed object by its name
 func GetToken(c echo.Context) error {
 	cc := c.(*model.RequestContext)
@@ -81,15 +114,19 @@ func GetToken(c echo.Context) error {
 	auth, err := c8yauth.GetUserSecurityContext(c)
 	if err != nil {
 		return c.JSON(http.StatusForbidden, ErrorMessage{
-			Error:  "invalid user context",
+			Err:    "invalid user context",
 			Reason: err.Error(),
 		})
+	}
+
+	if statusCode, err := checkMaxCertificates(cc.Microservice, auth); err != nil {
+		return c.JSON(statusCode, err)
 	}
 
 	// Check if device is already registered
 	if ExternalIdExists(cc.Microservice, auth.Tenant, externalID) {
 		return c.JSON(http.StatusConflict, ErrorMessage{
-			Error:  "Device is already registered",
+			Err:    "Device is already registered",
 			Reason: "The external identity already exists. You can only generate tokens for devices that don't already exist",
 		})
 	}
@@ -135,7 +172,7 @@ func GetToken(c echo.Context) error {
 		if err != nil {
 			slog.Error("Could not get microservice secret", "reason", err)
 			return c.JSON(http.StatusUnprocessableEntity, ErrorMessage{
-				Error:  "Could not get shared secret from microservice",
+				Err:    "Could not get shared secret from microservice",
 				Reason: err.Error(),
 			})
 		}
@@ -174,8 +211,12 @@ func GetToken(c echo.Context) error {
 }
 
 type ErrorMessage struct {
-	Error  string `json:"error"`
+	Err    string `json:"error"`
 	Reason string `json:"reason"`
+}
+
+func (e *ErrorMessage) Error() string {
+	return e.Err
 }
 
 func RegisterDevice(c echo.Context) error {
@@ -196,7 +237,7 @@ func RegisterDevice(c echo.Context) error {
 
 		if v, ok := data["token"]; !ok {
 			return c.JSON(http.StatusUnprocessableEntity, ErrorMessage{
-				Error:  "Token is mandatory",
+				Err:    "Token is mandatory",
 				Reason: "Registration request did not contain a token",
 			})
 		} else {
@@ -229,7 +270,7 @@ func RegisterDevice(c echo.Context) error {
 	if err != nil {
 		slog.Error("Invalid registration token.", "reason", err)
 		return c.JSON(http.StatusForbidden, ErrorMessage{
-			Error:  "Invalid registration token",
+			Err:    "Invalid registration token",
 			Reason: "Tip: You can only use a token once and only on devices which don't already exist",
 		})
 	}
@@ -237,7 +278,7 @@ func RegisterDevice(c echo.Context) error {
 	auth, err := c8yauth.GetUserSecurityContext(c)
 	if err != nil {
 		return c.JSON(http.StatusForbidden, ErrorMessage{
-			Error:  "invalid user context",
+			Err:    "invalid user context",
 			Reason: err.Error(),
 		})
 	}
@@ -246,7 +287,7 @@ func RegisterDevice(c echo.Context) error {
 	// since the token was issued?
 	if ExternalIdExists(cc.Microservice, auth.Tenant, externalID) {
 		return c.JSON(http.StatusConflict, ErrorMessage{
-			Error:  "Device is already registered",
+			Err:    "Device is already registered",
 			Reason: "The external identity already exists. You can only generate tokens for devices that don't already exist",
 		})
 	}
@@ -268,7 +309,7 @@ func RegisterDevice(c echo.Context) error {
 	if _, err := io.Copy(&certBuf, publicCertFile); err != nil {
 		slog.Error("Failed to read public certificate", "reason", err)
 		return c.JSON(http.StatusUnprocessableEntity, ErrorMessage{
-			Error:  "Failed to read certificate",
+			Err:    "Failed to read certificate",
 			Reason: err.Error(),
 		})
 	}
@@ -277,7 +318,7 @@ func RegisterDevice(c echo.Context) error {
 	if err != nil {
 		slog.Error("Invalid certificate", "reason", err)
 		return c.JSON(http.StatusUnprocessableEntity, ErrorMessage{
-			Error:  "Invalid certificate",
+			Err:    "Invalid certificate",
 			Reason: err.Error(),
 		})
 	}
@@ -294,6 +335,7 @@ func RegisterDevice(c echo.Context) error {
 	// With auto registration disabled as it will be registered via the bulk reg api (TODO: does not provide any value)
 	cert, certResp, err := cc.Microservice.Client.DeviceCertificate.Create(
 		cc.Microservice.WithServiceUser(auth.Tenant),
+		auth.Tenant,
 		&c8y.Certificate{
 			Name:                    externalID,
 			AutoRegistrationEnabled: false,
@@ -332,7 +374,7 @@ func RegisterDevice(c echo.Context) error {
 	if err != nil {
 		slog.Error("Failed to register device via bulk registration API", "reason", err)
 		return c.JSON(http.StatusForbidden, ErrorMessage{
-			Error:  "Failed to register device",
+			Err:    "Failed to register device",
 			Reason: err.Error(),
 		})
 	}
