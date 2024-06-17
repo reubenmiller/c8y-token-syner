@@ -108,3 +108,65 @@ c8y microservices create --file c8y-token-shared.zip
 # Upload enrolment service
 c8y microservices create --file c8y-token-syner.zip
 ```
+
+## Deployment to Cumulocity IoT
+
+**Note:** Before starting, you must of cloned the original "Device management" application, so that you can are allowed to add custom plugins to it.
+
+You can clone the application from the "Administration" application, select the "Device management application" and click "Clone".
+
+Once you have cloned the "Device management" application, the deployment of the custom UI plugin and microservices can be done using the following steps using [go-c8y-cli](https://goc8ycli.netlify.app/):
+
+1. Activate an already created go-c8y-cli session
+
+    ```sh
+    set-session
+    ```
+
+2. Install the ui plugin
+
+    ```sh
+    c8y ui plugins create --file "https://github.com/reubenmiller/cumulocity-device-enrolment-plugin/releases/download/1.0.0/cumulocity-device-enrolment-widget-1.0.0.zip"
+    ```
+
+3. Activate the widget into your device management application
+
+    ```sh
+    c8y ui applications plugins install --application devicemanagement --plugin cumulocity-device-enrolment-widget
+    ```
+
+4. Download the microservices from the releases pages
+
+    ```sh
+    wget https://github.com/reubenmiller/c8y-token-syner/releases/download/0.0.1/c8y-token-shared.zip
+    wget https://github.com/reubenmiller/c8y-token-syner/releases/download/0.0.1/c8y-token-syner.zip
+    ```
+
+5. Install the microservices
+
+    ```sh
+    c8y microservices create --file ./c8y-token-shared.zip
+    c8y microservices create --file ./c8y-token-syner.zip
+    ```
+
+6. Add the following user roles to be able to request new tokens
+
+    ```sh
+    c8y userroles addRoleToUser --user "$C8Y_USER" --role "ROLE_TOKEN_TRIAL_REQUEST_CREATE"
+    ```
+
+    After adding the above role, you will have to login/reactivate your session using:
+
+    ```sh
+    set-session --clear
+    ```
+
+7. Verify the microservice is working correct (it may take a few minutes for the microservice to be ready)
+
+    ```sh
+    c8y api "service/c8y-token-syner/token?externalId=helloworld" --raw
+    ```
+
+8. On the device management home page, add the "Device Enrolment" plugin
+
+    <img src="./docs/ui-preview.png" alt="ui-preview" width="300">
