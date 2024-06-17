@@ -4,9 +4,6 @@ on:
   push:
     tags:
       - "*"
-    branches:
-      - ci-build-workflow
-
   merge_group:
   workflow_dispatch:
 
