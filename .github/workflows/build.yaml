@@ -44,6 +44,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Get artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts
+          path: dist
       - name: Release
         uses: softprops/action-gh-release@v2
         env:
@@ -51,3 +56,5 @@ jobs:
         with:
           generate_release_notes: true
           draft: true
+          files: |
+            dist/*.zip
