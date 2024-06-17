@@ -1,7 +1,7 @@
 {
   "apiVersion": "v2",
   "name": "c8y-token-syner",
-  "version": "0.0.2-SNAPSHOT",
+  "version": "0.0.1",
   "provider": {
     "name": "thin-edge.io",
     "domain": "https://thin-edge.io",
