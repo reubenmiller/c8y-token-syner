@@ -145,8 +145,8 @@ Once you have cloned the "Device management" application, the deployment of the 
 5. Install the microservices
 
     ```sh
-    c8y microservices create --file ./c8y-token-shared.zip
     c8y microservices create --file ./c8y-token-syner.zip
+    c8y microservices create --file ./c8y-token-shared.zip
     ```
 
 6. Add the following user roles to be able to request new tokens
