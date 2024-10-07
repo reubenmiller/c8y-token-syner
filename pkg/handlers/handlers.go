@@ -189,11 +189,11 @@ func GetToken(c echo.Context) error {
 
 	code := stoken + "#" + encodedAuthHeader
 	installScriptDevice := strings.TrimSpace(fmt.Sprintf(`
-	wget -O - https://raw.githubusercontent.com/reubenmiller/c8y-token-syner/main/tools/trial-bootstrap | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
+	curl -fsSL https://thin-edge.io/trial-linux.sh | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
 	`, tenant.DomainName, externalID, code))
 
 	installScriptDocker := strings.TrimSpace(fmt.Sprintf(`
-	wget -O - https://raw.githubusercontent.com/reubenmiller/c8y-token-syner/main/tools/trial-bootstrap-docker | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
+	curl -fsSL https://thin-edge.io/trial-linux-docker.sh | sh -s -- --enrol 'https://%s/service/c8y-token-syner/register/%s' --code '%s'
 	`, tenant.DomainName, externalID, code))
 
 	switch scriptType {
